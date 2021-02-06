@@ -7,8 +7,10 @@ import io
 import os
 import threading
 import time
+import winreg
 
-from ctypes.wintypes import WORD, DWORD, BOOL, HWND
+from ctypes.wintypes import BOOL, HWND, LPARAM
+
 
 try:
     import pandas as pd
@@ -17,11 +19,11 @@ except Exception as e:
 
 try:
     import keyboard
-    from keyboard import write as fill
+    from keyboard import write
 except Exception as e:
     print(e)
     from pywinauto import keyboard
-    from pywinauto.keyboard import send_keys as fill
+    from pywinauto.keyboard import send_keys as write
 
 
 class Msg:
@@ -81,7 +83,11 @@ COLNAMES = {
     '发生金额': 'total',
     '手续费': 'commission',
     '印花税': 'tax',
-    '其他杂费': 'fees'
+    '其他杂费': 'fees',
+    '资金余额': 'balance',  # 银河证券
+    '可用金额': 'cash',
+    '总市值': 'market_value',
+    '总资产': 'equity'
 }
 
 OPTIONS = {
@@ -136,37 +142,48 @@ def check_input_mode(h_edit, text='000001'):
     return 'WM' if user32.SendMessageW(h_edit, 14, 0, 0) == len(text) else 'KB'
 
 
-def find_one(keyword='交易系统') -> int:
-    '''找到最靠前的那个已登录的交易客户端
+def find_one(keyword='交易系统', visible=True) -> int:
+    '''找到主窗口句柄
     keyword: str or list
+    visible: {True, False, None}
     '''
-    from ctypes.wintypes import BOOL, HWND, LPARAM
+    if isinstance(keyword, str):
+        keyword = [keyword]
+    buf = ctypes.create_unicode_buffer(64)
+    handle = ctypes.c_ulong()
 
     @ctypes.WINFUNCTYPE(BOOL, HWND, LPARAM)
     def callback(hwnd, lparam):
         user32.GetWindowTextW(hwnd, buf, 64)
         for s in keyword:
-            if s in buf.value:
+            if s in buf.value and (
+                    visible is None or bool(user32.IsWindowVisible(hwnd))) is visible:
                 handle.value = hwnd
                 return False
         return True
 
-    if isinstance(keyword, str):
-        keyword = [keyword]
-    buf = ctypes.create_unicode_buffer(64)
-    handle = ctypes.c_ulong()
     user32.EnumWindows(callback)
     return handle.value
+
+
+def curr_time():
+    return time.strftime('%Y-%m-%d %X')  # backward
 
 
 def get_today():
     return datetime.date.today()
 
 
-def get_text(h_parent, text_id):
+def get_text(handle=None, h_parent=None, id_child=None, classname: str = None, num=32) -> str:
     '获取控件文本内容'
     buf = ctypes.create_unicode_buffer(64)
-    user32.SendDlgItemMessageW(h_parent, text_id, Msg.WM_GETTEXT, 64, buf)
+    if isinstance(classname, str):
+        handle: int = user32.FindWindowExW(h_parent, None, classname, None)
+    if isinstance(handle, int):
+        user32.SendMessageW(handle, Msg.WM_GETTEXT, num, buf)
+    elif isinstance(id_child, int):
+        user32.SendDlgItemMessageW(
+            h_parent, id_child, Msg.WM_GETTEXT, num, buf)
     return buf.value.rstrip('%')
 
 
@@ -233,16 +250,148 @@ def go_to_top(h_root: int):
         if user32.GetForegroundWindow() == h_root:
             return True
         user32.SwitchToThisWindow(h_root, True)
-        time.sleep(0.01) # DON'T REMOVE!
+        time.sleep(0.01)  # DON'T REMOVE!
 
 
-def get_rect(obj_handle, ext_rate=0):
-    '''locate the control'''
+def image_to_string(image, token={
+    'appId': '11645803',
+    'apiKey': 'RUcxdYj0mnvrohEz6MrEERqz',
+        'secretKey': '4zRiYambxQPD1Z5HFh9VOoPXPK9AgBtZ'}):
+    if not isinstance(image, bytes):
+        buf = io.BytesIO()
+        image.save(buf, 'png')
+        image = buf.getvalue()
+    return __import__('aip').AipOcr(**token).basicGeneral(image).get(
+        'words_result')[0]['words']
+
+
+def locate_folder(name='Personal'):
+    """Personal Recent
+    """
+    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                         r'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders')
+    return winreg.QueryValueEx(key, name)[0]  # dir, type
+
+
+def simulate_shortcuts(key1, key2=None):
+    KEYEVENTF_KEYUP = 2
+    scan1 = user32.MapVirtualKeyW(key1, 0)
+    user32.keybd_event(key1, scan1, 0, 0)
+    if key2:
+        scan2 = user32.MapVirtualKeyW(key2, 0)
+        user32.keybd_event(key2, scan2, 0, 0)
+        user32.keybd_event(key2, scan2, KEYEVENTF_KEYUP, 0)
+    user32.keybd_event(key1, scan1, KEYEVENTF_KEYUP, 0)
+
+
+def click_key(self, keyCode, param=0):  # 单击按键
+    if keyCode:
+        user32.PostMessageW(self._page, util.Msg.WM_KEYDOWN, keyCode, param)
+        user32.PostMessageW(self._page, util.Msg.WM_KEYUP, keyCode, param)
+    return self
+
+
+def get_rect(obj_handle):
+    '''locate the control
+    '''
     rect = ctypes.wintypes.RECT()
     user32.GetWindowRect(obj_handle, ctypes.byref(rect))
-    user32.SetForegroundWindow(user32.GetParent(obj_handle))  # have to
-    return rect.left, rect.top, rect.right + (
-        rect.right - rect.left) * ext_rate, rect.bottom
+    return rect.left, rect.top, rect.right, rect.bottom
+
+
+def click_context_menu(text: str, x: int = 0, y: int = 0, delay: float = 0.1):
+    '''点选右键菜单
+    '''
+    user32.SetCursorPos(x, y)
+    user32.mouse_event(Msg.MOUSEEVENTF_RIGHTDOWN | Msg.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
+    time.sleep(delay)
+    write(text)
+
+
+def wait_for_popup(root: int, popup_title=None, timeout: float = 3.0, interval: float = 0.01):
+    buf = ctypes.create_unicode_buffer(64)
+    start = time.time()
+    while True:
+        time.sleep(interval)  # DON'T REMOVE
+        h_popup: int = user32.GetLastActivePopup(root)
+        if h_popup != root:
+            user32.SendMessageW(h_popup, Msg.WM_GETTEXT, 64, buf)
+            if popup_title is None or buf.value in popup_title:
+                return h_popup
+            if time.time() - start >= timeout:
+                break
+
+
+def wait_for_view(handle: int, timeout: float = 1, interval: float = 0.1):
+    for _ in range(int(timeout / interval)):
+        if user32.IsWindowVisible(handle):
+            return True
+        time.sleep(interval)
+    return False
+
+
+def get_child_handle(h_parent=None, label=None, clsname=None, id_ctrl=None, visible=True):
+    '''获取子窗口句柄
+
+    h_parent: None 表示桌面
+    '''
+    assert isinstance(h_parent, int), 'Wrong data type.'
+
+    if isinstance(id_ctrl, int):
+        return user32.GetDlgItem(h_parent, id_ctrl)
+
+    hwndChildAfter = None
+    group = []
+    for _ in range(9):
+        handle: int = user32.FindWindowExW(h_parent, hwndChildAfter, clsname, label)
+        if visible is None or bool(user32.IsWindowVisible(handle)) is visible:
+            return handle
+        if handle in group:
+            break
+        group.append(handle)
+        hwndChildAfter = handle
+
+
+def click_button(h_button=None, h_dialog=None, label=None):
+    if isinstance(h_dialog, int):
+        h_button = get_child_handle(h_dialog, label, 'Button')
+    assert isinstance(h_button, int), TypeError('Must be a integer!', h_button)
+    user32.PostMessageW(h_button, Msg.BM_CLICK, 0, 0)
+
+
+def fill(text: str, h_edit: int):
+    '''填写字符串'''
+    assert isinstance(text, str), TypeError('Must be a string!', text)
+    assert isinstance(h_edit, int), TypeError('Must be a integer!', h_edit)
+    user32.SendMessageW(h_edit, Msg.WM_SETTEXT, 0, text)
+
+
+def export_data(path: str, root=None, label='另存为', location=False):
+    if os.path.isfile(path):
+        os.remove(path)
+
+    if user32.IsIconic(root):
+        print('如果返回空值，请先查一下"order"或"deal"，再查其他的。')
+
+    h_popup = wait_for_popup(root, label)
+    if wait_for_view(h_popup):
+        if location:
+            fill(path, get_child_handle(h_popup, clsname='Edit'))
+            time.sleep(0.1)
+        click_button(h_dialog=h_popup, label='保存(&S)')
+
+    string = ''
+    for _ in range(99):
+        time.sleep(0.05)
+        if os.path.isfile(path):
+            try:
+                with open(path) as f:  # try to acquire file lock and read file content
+                    string = f.read()
+            except Exception:
+                continue
+            else:
+                break
+    return string
 
 
 if __name__ == "__main__":

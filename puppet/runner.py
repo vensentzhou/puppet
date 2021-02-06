@@ -2,7 +2,7 @@
 Author: 睿瞳深邃(https://github.com/Raytone-D)
 License: MIT
 Release date: 2020-06-06
-Version: 0.3
+Version: 0.4
 '''
 
 from .client import Account, __version__
@@ -25,7 +25,7 @@ def run(host='127.0.0.1', port=10086):
         return {'puppet': '仅支持json格式'}
 
     print('Puppet version:', __version__)
-    acc = Account()
+    acc = Account(to_dict=True)
     run(host=host, port=port)
 
 

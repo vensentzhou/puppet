@@ -5,7 +5,7 @@
 """
 __author__ = "睿瞳深邃(https://github.com/Raytone-D)"
 __project__ = 'Puppet'
-__version__ = "1.6.3"
+__version__ = "1.7.8"
 __license__ = 'MIT'
 
 import ctypes
@@ -16,11 +16,9 @@ import subprocess
 import re
 import random
 import threading
-import winreg
 import os
 
 from functools import reduce, lru_cache, partial
-from collections import OrderedDict
 from importlib import import_module
 
 from . import util
@@ -29,100 +27,8 @@ from . import util
 user32 = ctypes.windll.user32
 
 
-curr_time = lambda : time.strftime('%Y-%m-%d %X')  # backward
-
-
 def login(accinfos):
     return Account(accinfos)
-
-
-def grab(rect):
-    return import_module('PIL.ImageGrab').grab(rect)
-
-
-def image_to_string(image, token={
-    'appId': '11645803',
-    'apiKey': 'RUcxdYj0mnvrohEz6MrEERqz',
-    'secretKey': '4zRiYambxQPD1Z5HFh9VOoPXPK9AgBtZ'}):
-    if not isinstance(image, bytes):
-        buf = import_module('io').BytesIO()
-        image.save(buf, 'png')
-        image = buf.getvalue()
-    return import_module('aip').AipOcr(**token).basicGeneral(image).get(
-        'words_result')[0]['words']
-
-
-def get_text(obj_handle, num=32):
-    buf = ctypes.create_unicode_buffer(num)
-    user32.SendMessageW(obj_handle, util.Msg.WM_GETTEXT, num, buf)
-    return buf.value
-
-
-def lacate_folder(name='Personal'):
-    """Personal Recent
-    """
-    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-        r'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders')
-    return winreg.QueryValueEx(key, name)[0]  # dir, type
-
-
-def wait_for_popup(root=None):
-    buf = ctypes.create_unicode_buffer(64)
-    for _ in range(9):
-        hwnd = user32.GetForegroundWindow() if root is None else user32.GetLastActivePopup(root)
-        user32.GetWindowTextW(hwnd, buf, 64)
-        if buf.value == '另存为' and user32.IsWindowVisible(hwnd):
-            print("wait_for_popup 存在另存为的窗口")
-            return True
-        elif buf.value == '确认另存为' and user32.IsWindowVisible(hwnd):
-            print("wait_for_popup 存在确认另存为窗口")
-            simulate_shortcuts(13)
-            return True
-        time.sleep(0.2)
-    return False
-
-
-def simulate_shortcuts(key1, key2=None):
-    KEYEVENTF_KEYUP = 2
-    scan1 = user32.MapVirtualKeyW(key1, 0)
-    user32.keybd_event(key1, scan1, 0, 0)
-    if key2:
-        scan2 = user32.MapVirtualKeyW(key2, 0)
-        user32.keybd_event(key2, scan2, 0, 0)
-        user32.keybd_event(key2, scan2, KEYEVENTF_KEYUP, 0)
-    user32.keybd_event(key1, scan1, KEYEVENTF_KEYUP, 0)
-
-
-def export_data(path: str, root=None):
-    VK_CONTROL = 17
-    VK_ALT = 18
-    VK_S = 83
-    if os.path.exists(path):
-        print('删除旧文件' + path)
-        os.remove(path)
-    for _ in range(3):
-        simulate_shortcuts(VK_CONTROL, VK_S)  # 右键保存 Ctrl+S
-        for _ in range(9):
-            time.sleep(0.05)  # DON'T REMOVE!
-            if user32.GetLastActivePopup(root) != root:
-                if wait_for_popup(root):
-                    simulate_shortcuts(VK_ALT, VK_S)  # 按钮保存 Alt+S 或 回车键
-                    time.sleep(0.05)
-                    for i in range(99):
-                        time.sleep(0.05)
-                        if not os.path.exists(path):
-                            continue
-                        try:
-                            with open(path) as f:  # try to acquire file lock and read file content
-                                string = f.read()
-                        except Exception:
-                            continue
-                        else:
-                            os.remove(path)
-                            if string:
-                                return string
-                            break
-    return ''
 
 
 class Ths:
@@ -144,7 +50,7 @@ class Ths:
         'balance': 165,
         'cash': 165,
         'position': 165,
-        'market_value': 165,
+        'account': 165,
         'equity': 165,
         'assets': 165,
         'deal': 167,
@@ -168,13 +74,12 @@ class Ths:
     }
     INIT = ('cancel', 'deal', 'order', 'buy', 'sell')
     LOGIN = (1011, 1012, 1001, 1003, 1499)
-    ACCOUNT = (59392, 0)  #, 1711)
-    # ACCOUNT = (('account', (59392, 0, 1711), 'code', (59392, 0, 1004))
+    ACCOUNT = (59392, 0)  # , 1711)
     MKT = (59392, 0, 1003)
     TABLE = (1047, 200, 1047)
-    SUMMARY_ = (1308, 200, 1308)
+    SUMMARY_ = ('summary', 'margin')
     SUMMARY = (('cash', 1016), ('frozen', 1013), ('balance', 1012),
-        ('market_value', 1014), ('equity', 1015), ('position_pct', 1019))
+               ('market_value', 1014), ('equity', 1015), ('position_pct', 1019))
     # symbol, price, max_qty, quantity, quote
     BUY = (1032, 1033, 1034, 0, 1018)
     SELL = (1032, 1033, 1034, 0, 1038)
@@ -188,11 +93,11 @@ class Ths:
     FRESH = 32790
     QUOTE = 1024
     MARGIN = (('id', 10001), ('guarantee_rate', 10003), ('margin', 10006),
-        ('cash', 10008), ('frozen', 10009), ('balance', 10007),
-        ('market_value', 10010), ('equity', 10032), ('debts', 10005), ('assets', 10004))
+              ('cash', 10008), ('frozen', 10009), ('balance', 10007),
+              ('market_value', 10010), ('equity', 10032), ('debts', 10005), ('assets', 10004))
     BUTTON = {'cancel_all': '全撤(Z /)', 'cancel_buy': '撤买(X)', 'cancel_sell': '撤卖(C)',
-        'cancel': '撤单', 'buy': '买入[B]','sell': '卖出[S]','reverse_repo': '确定',
-        'margin_cancel_all': '全撤(Z /)', 'margin_cancel_buy': '撤买(X)', 'margin_cancel_sell': '撤卖(C)'}
+              'cancel': '撤单', 'buy': '买入[B]', 'sell': '卖出[S]', 'reverse_repo': '确定',
+              'margin_cancel_all': '全撤(Z /)', 'margin_cancel_buy': '撤买(X)', 'margin_cancel_sell': '撤卖(C)'}
     ERROR = ['无可撤委托', '提交失败', '当前时间不允许委托']
     WAY = {
         0: "LIMIT              限价委托 沪深",
@@ -208,15 +113,16 @@ class Ths:
 class Account:
     '''Puppet Trading Account API'''
 
-    def __init__(self, accinfos={}, enable_heartbeat=True, copy_protection=False,\
-        to_dict=True, dirname='', keyboard=True, title=None, **kwargs):
+    def __init__(self, accinfos=None, enable_heartbeat=True, to_dict=False, dirname='',
+                 keyboard=True, title=None, **kwargs):
         self.accinfos = accinfos
         self.enable_heartbeat = enable_heartbeat
-        self.copy_protection = copy_protection
         self.to_dict = to_dict
         self.dirname = dirname
         self.keyboard = keyboard
         self.title = title
+        self.kwargs = kwargs
+
         self._post_init()
 
     def _post_init(self):
@@ -224,95 +130,92 @@ class Account:
         self.root = 0
         self.id = None
         self.ctx = Ths
-        self.filename = '{}\\table.xls'.format(self.dirname or lacate_folder())
-        self.loginfile = '{}\\login.json'.format(self.dirname or lacate_folder())
-
-        if os.path.isfile(self.filename):
-            os.remove(self.filename)
-
-        if self.accinfos:
-            self.login(**self.accinfos)
-        elif self.title != None:
-            self.bind(self.title)
+        self.filename = '{}\\table.xls'.format(
+            self.dirname or util.locate_folder())
+        self.loginfile = '{}\\login.json'.format(
+            self.dirname or util.locate_folder())
 
         self.cancel_all = partial(self.cancel, action='cancel_all')
         self.cancel_buy = partial(self.cancel, action='cancel_buy')
         self.cancel_sell = partial(self.cancel, action='cancel_sell')
         self.cancel_buy.__doc__ = '撤销指定证券代码的买单'
         self.cancel_sell.__doc__ = '撤销指定证券代码的卖单'
+        self.query = self.export_data if not self.kwargs.get('copy') else self.copy_data
 
-    def __get_node(self) -> int:
-        node = self.ctx.PAGE
-        # node = task.get('category') or task.get('action')
-        # idx = self.ctx.NODE.get(node)
-        # user32.PostMessageW(self.root, util.Msg.WM_COMMAND, 0x2000<<16|idx, 0)
-        # node = self.__get_node()
-        # time.sleep(1)  # temporary 这里改为用刷新按钮颜色判断
-        return reduce(user32.GetDlgItem, node, self.root)
+        if self.accinfos:
+            self.login(**self.accinfos)
+        elif isinstance(self.title, str):
+            self.bind(self.title)
 
-    def forward(self, task: dict):
-        '''{'action': 'sell', 'symbol': '000001', 'price': 12.33, 'quantity': 100}'''
-        try:
-            return getattr(self, task.pop('action'))(**task)
-        except Exception as e:
-            # task.update({'msg': e})
-            return {'msg': e}
+    @property
+    def status(self):
+        return 'on-line' if user32.IsWindowVisible(self.root) else 'off-line'
 
     def run(self, exe_path):
-        assert 'xiadan' in subprocess.os.path.basename(exe_path).split('.')\
-            and subprocess.os.path.exists(
+        '''行情终端集成的多券商统一版的登录窗没有标题'''
+        assert 'xiadan' in os.path.basename(exe_path).split('.')\
+            and os.path.exists(
                 exe_path), '客户端路径("%s")错误' % exe_path
-        print('{} 正在尝试运行客户端("{}")...'.format(curr_time(), exe_path))
+        print('{} 正在尝试运行客户端("{}")...'.format(util.curr_time(), exe_path))
         pid = subprocess.Popen(exe_path).pid
+
         text = ctypes.c_ulong()
         hwndChildAfter = None
         for _ in range(30):
             self.wait()
             h_login = user32.FindWindowExW(None, hwndChildAfter, '#32770', None)
-            combobox_h = user32.GetDlgItem(h_login, 1011)  # ComboBox 0x3F3 1011
-            if combobox_h:
-                user32.GetWindowThreadProcessId(h_login, ctypes.byref(text))
-                if text.value == pid:
-                    self._page = h_login
-                    self.h_login = h_login
-                    break
+            user32.GetWindowThreadProcessId(h_login, ctypes.byref(text))
+            if text.value == pid:
+                self._page = h_login
+                self.h_login = h_login
+                break
             hwndChildAfter = h_login
-        [self.wait() for _ in range(9) if not self.visible(h_login)]
-        *self._handles, h1, h2, self._IMG = [user32.GetDlgItem(
-            self._page, i) for i in self.ctx.LOGIN]
-        self._handles.append(h2 if self.visible(h2) else h1)
-        self.root = user32.GetParent(h_login)
-        print('{} 登录界面准备就绪。'.format(curr_time()))
 
-    def login(self, account_no: str ='', password: str ='', comm_pwd: str ='',
-        client_path: str=''):
+        if util.wait_for_view(self.h_login, timeout=9):
+            *self._handles, h1, h2, self._IMG = [user32.GetDlgItem(
+                self._page, i) for i in self.ctx.LOGIN]
+            self._handles.append(h2 if self.visible(h2) else h1)
+            self.root = user32.GetParent(self.h_login)
+            print('{} 登录界面准备就绪。'.format(util.curr_time()))
+
+    def login(self, account_no: str = '', password: str = '', comm_pwd: str = '',
+              client_path: str = ''):
         self.run(client_path)
-        print('{} 正在登录交易服务器...'.format(curr_time()))
-        user32.SetForegroundWindow(self.h_login)
+        print('{} 正在登录交易服务器...'.format(util.curr_time()))
+
+        from PIL.ImageGrab import grab
 
         while True:
             time.sleep(.5)
             if user32.GetForegroundWindow() == self.h_login:
                 # 模拟键盘输入
                 util.keyboard.send(util.keyboard.KEY_UP)
-                info = (account_no, password, comm_pwd or image_to_string(grab(util.get_rect(self._IMG))))
+                info = (account_no, password, comm_pwd or util.image_to_string(
+                    grab(util.get_rect(self._IMG))))
                 for text in info:
-                    util.fill(text)
-                    time.sleep(1)
+                    util.write(text)
+                    time.sleep(0.5)
                     util.keyboard.send('\r')
                 break
+            user32.SetForegroundWindow(self.h_login)
 
         # self.capture()
         if self.visible(times=20):
             self.account_no = account_no
             self.password = password
             self.comm_pwd = comm_pwd
-            self.mkt = (0, 1) if get_text(self.get_handle('mkt')).startswith(
+            self.mkt = (0, 1) if util.get_text(self.get_handle('mkt')).startswith(
                 '上海') else (1, 0)
-            print('{} 已登入交易服务器。'.format(curr_time()))
+            print('{} 已登入交易服务器。'.format(util.curr_time()))
             self.init()
-            return {'puppet': "{} 木偶准备就绪！".format(curr_time())}
-        return {'puppet': '{} 登录失败或服务器失联'.format(curr_time())}
+            return {'puppet': "{} 木偶准备就绪！".format(util.curr_time())}
+
+        # 兼容广发证券
+        util.keyboard.send('\r')
+        if util.wait_for_view(self.root, 9):
+            self.init()
+
+        return {'puppet': '{} 登录失败或服务器失联'.format(util.curr_time())}
 
     def exit(self):
         "退出系统并关闭程序"
@@ -324,21 +227,21 @@ class Account:
     def fill_and_submit(self, *args, delay=0.1, label=''):
         user32.SetForegroundWindow(self._page)
         for text, handle in zip(args, self._handles):
-            self.fill(str(text), handle)
+            util.fill(str(text), handle)
             if delay:
                 for _ in range(9):
-                    max_qty = self._text(self._handles[-1])
+                    max_qty = util.get_text(self._handles[-1])
                     if max_qty not in (''):
                         break
                     self.wait(delay)
         self.wait(0.1)
-        self.click_button(label)
+        util.click_button(h_dialog=self._page, label=label)
         return self
 
     def __get_id(self):
-        return util.get_text(self.get_handle('account'), 1711)
+        return util.get_text(0, self.get_handle('account'), 1711)
 
-    def trade(self, action: str, symbol: str ='', *args, delay: float =0.1) -> dict:
+    def trade(self, action: str, symbol: str = '', *args, delay: float = 0.1) -> dict:
         """下单
         客户端->系统->交易设置->默认买入价格(数量): 空、默认卖出价格(数量):空
         :action: str, 交易方式; "buy2"或"sell2", 'margin'
@@ -357,8 +260,6 @@ class Account:
         """
         util.go_to_top(self.root)
         self.switch(action)
-        if action in ('buy', 'sell', 'reverse_repo', 'purchase', 'redeem'):
-            self.switch_mkt(symbol, self.get_handle('mkt'))
         self._handles = self.get_handle(action)
         label = self.ctx.BUTTON.get(action)
         return self.fill_and_submit(symbol, *args, delay=delay, label=label).wait().answer()
@@ -378,16 +279,16 @@ class Account:
         2020-12-08 重构撤单代码
         '''
         util.go_to_top(self.root)
-        self.switch('cancel').wait(1)  # have to
+        self.switch('cancel', 1)
 
         if isinstance(symbol, str):
-            h_edit = user32.GetDlgItem(self._page, 3348)
-            user32.SendMessageW(h_edit, util.Msg.WM_SETTEXT, 0, str(symbol))
-            h_button = user32.FindWindowExW(self._page, 0, 'Button', '撤单')
+            h_edit = util.get_child_handle(self._page, id_ctrl=3348, clsname='Edit', visible=None)
+            util.fill(symbol, h_edit)
+            h_button = util.get_child_handle(self._page, label='撤单', clsname='Button')
 
             for _ in range(9):
                 if user32.SendMessageW(h_edit, util.Msg.WM_GETTEXTLENGTH, 0, 0) == len(symbol):
-                    self.click_button('查询代码')
+                    util.click_button(h_dialog=self._page, label='查询代码')
                     break
                 time.sleep(0.05)
             for _ in range(9):
@@ -395,7 +296,8 @@ class Account:
                     break
                 time.sleep(0.05)
 
-        return self.click_button(self.ctx.BUTTON[action]).answer()
+        util.click_button(h_dialog=self._page, label=self.ctx.BUTTON[action])
+        return self.answer()
 
     def purchase_new(self):
         "新股申购"
@@ -420,31 +322,9 @@ class Account:
         """基金申购"""
         return self.trade('purchase', symbol, amount)
 
-    def fund_redeem(self, symbol:str, share: int):
+    def fund_redeem(self, symbol: str, share: int):
         """基金赎回"""
         return self.trade('redeem', symbol, share)
-
-    def query(self, category: str='summary'):
-        """realtime trading data
-        category: 'summary', 'position', 'order', 'deal', 'undone', 'historical_deal'
-        'delivery_order', 'new', 'bingo', 'margin', 'margin_pos', 'discount' 其中之一
-        2019-5-19 加入数据缓存功能
-        2020-2-6 修复 if-elif
-        """
-        print('Querying {} on-line...'.format(category))
-        if user32.IsIconic(self.root):
-            print('如果返回空值，请先查一下"order"或"deal"，再查其他的。')
-        util.go_to_top(self.root)
-        self.switch(category)
-
-        if category in ('summary', 'margin'):
-            time.sleep(1)  # temporary
-            rtn = dict((x, float(util.get_text(self._page, y))) for x,y in getattr(self.ctx, category.upper()))
-            rtn.update(login_id=self.__get_id(), token=id(self))
-        else:  # data sheet
-            string = export_data(self.filename, self.root)
-            rtn = util.normalize(string, self.to_dict) if isinstance(string, str) and len(string) > 0 else {}
-        return rtn
 
     def buy_on_margin(self, symbol: str, price, quantity: int) -> dict:
         '''融资买入'''
@@ -457,15 +337,9 @@ class Account:
     "Development"
 
     def __repr__(self):
-        return "<%s(ver=%s root=%s)>" % (self.__class__.__name__, __version__, self.root)
+        return "<Puppet %s(%s | %s)>" % (self.__class__.__name__, __version__, self.status)
 
-    def restart(self):
-        # 脱把重新寻找窗口
-        self.get_handle.cache_clear()  # 清空操作句柄缓存
-        self.root = user32.FindWindowW(0, self.title)
-        self.set_focus()
-
-    def bind(self, arg='', dirname: str='', **kwargs):
+    def bind(self, arg='', dirname: str = '', **kwargs):
         """"
         :arg: 客户端的标题或根句柄
         :mkt: 交易市场的索引值
@@ -479,13 +353,13 @@ class Account:
             self.root = kwargs.get('root') or arg
         if self.visible(self.root):
             self.birthtime = time.ctime()
-            self.title = self.text(self.root)
-            self.mkt = (0, 1) if self._text(
+            self.title = util.get_text(self.root)
+            self.mkt = (0, 1) if util.get_text(
                 self.get_handle('mkt')).startswith('上海') else (1, 0)
             self.idx = 0
             self.init()
-            self.filename = '{}\\table.xls'.format(dirname or lacate_folder())
-            return {'puppet': "{} 木偶准备就绪！".format(curr_time())}
+            self.filename = '{}\\table.xls'.format(dirname or util.locate_folder())
+            return {'puppet': "{} 木偶准备就绪！".format(util.curr_time())}
         return {'puppet': '标题错误或者客户端失联'}
 
     def visible(self, hwnd=None, times=0):
@@ -497,101 +371,99 @@ class Account:
                 self.wait()
         return False
 
-    def set_focus(self):
-        if user32.IsIconic(self.root):
-            print('窗口被最小化')
-            user32.ShowWindow(self.root, 9)
-            self.wait(0.1)
-        user32.SwitchToThisWindow(self.root)  # 切换窗口
-        user32.SetForegroundWindow(self.root)  # 设置前台窗口
-        handle = user32.GetLastActivePopup(self.root)  # 获取浮窗
-        buf = ctypes.create_unicode_buffer(64)
-        while handle != self.root:
-            # user32.SwitchToThisWindow(handle)
-            user32.GetWindowTextW(handle, buf, 64)
-            if buf.value == '确认另存为' and user32.IsWindowVisible(handle):
-                print("set_focus 存在确认另存为的窗口", handle)
-                user32.SwitchToThisWindow(handle)
-                simulate_shortcuts(0x0D)  # 发送回车键
-                time.sleep(0.1)
-                handle = user32.GetLastActivePopup(self.root)
-                user32.GetWindowTextW(handle, buf, 64)
-                if buf.value == '另存为' and user32.IsWindowVisible(handle):  # 弹窗标题
-                    print("set_focus 存在另存为的窗口", handle)
-                    user32.PostMessageW(handle, util.Msg.WM_CLOSE, 0, 0)
-            elif buf.value == '另存为' and user32.IsWindowVisible(handle):  # 弹窗标题
-                print("set_focus 存在另存为的窗口", handle)
-                # simulate_shortcuts(0x0D)  # 发送回车键
-                user32.PostMessageW(handle, util.Msg.WM_CLOSE, 0, 0)
-            else:
-                simulate_shortcuts(0x0D)  # 发送回车键
-            handle = user32.GetLastActivePopup(self.root)  # 获取浮窗
-            time.sleep(0.1)
-        user32.SwitchToThisWindow(self.root)  # 切换窗口
-
-    def switch(self, name):
+    def switch(self, name, delay=0.01):
         self.heartbeat_stamp = time.time()
         assert self.visible(), "客户端已关闭或账户已登出"
-        node = name if isinstance(name, int) else self.ctx.NODE.get(name, 165)
-        if user32.SendMessageW(self.root, util.Msg.WM_COMMAND, 0x2000<<16|node, 0):
+        node = name if isinstance(name, int) else self.ctx.NODE[name]
+        if user32.SendMessageW(self.root, util.Msg.WM_COMMAND, 0x2000 << 16 | node, 0):
             self._page = reduce(user32.GetDlgItem, self.ctx.PAGE, self.root)
+            time.sleep(delay)
             return self
 
     def init(self):
         for name in self.ctx.INIT:
-            self.switch(name).wait(0.3)
-        self.switch('position')
+            self.switch(name, 0.3)
 
         if self.keyboard:
             def func(*args, **kwargs):
                 user32.SetForegroundWindow(self._page)
                 for text in args:
-                    util.fill('{}\n'.format(text))
+                    util.write('{}\n'.format(text))
                 return self
             self.fill_and_submit = func
 
-        user32.ShowOwnedPopups(self.root, True)
-        self.set_focus()
+        user32.ShowOwnedPopups(self.root, False)
+
+        # 写入 table.xls 的绝对路径
+        self.location = True
+        self.query('deal')
+        self.location = False
 
         self.make_heartbeat()
         self.id = self.__get_id()
 
-        print("{} 木偶准备就绪！".format(curr_time()))
+        print("{} 木偶准备就绪！".format(util.curr_time()))
         return self
 
     def wait(self, timeout=0.5):
         time.sleep(timeout)
         return self
 
-    def copy_data(self, h_table: int):
-        "将CVirtualGridCtrl|Custom<n>的数据复制到剪贴板"
-        # 代码失效，等待移除。
-        _replace = {'参考市值': '市值', '最新市值': '市值'}  # 兼容国金/平安"最新市值"、银河“参考市值”。
+    def export_data(self, category: str = 'summary') -> dict:
+        """export latest trading data
+
+        category: 'summary', 'position', 'order', 'deal', 'undone', 'historical_deal'
+        'delivery_order', 'new', 'bingo', 'margin', 'margin_pos', 'discount' 其中之一
+        """
+        print('Querying {} on-line...'.format(category))
+        self.switch(category)
+        util.go_to_top(self.root)
+
+        _l, ypos, xpos, _b = util.get_rect(self.root)
+        xpos -= 16
+        ypos += 166 if category in self.ctx.SUMMARY_ else 332
+
+        rtn = {'puppet': False} if self.to_dict else util.pd.DataFrame()
+        if util.get_text(user32.WindowFromPoint(ctypes.wintypes.POINT(xpos, ypos))) == '':
+            time.sleep(1)  # temporary
+            rtn = dict((x, float(util.get_text(h_parent=self._page, id_child=y)))
+                       for x, y in getattr(self.ctx, category.upper()))
+            rtn.update(login_id=self.__get_id(), token=id(self))
+
+        else:
+            time.sleep(0.5)
+            util.click_context_menu('s', xpos, ypos)
+            string = util.export_data(self.filename, self.root, location=self.location)
+            if string != '':
+                rtn = util.normalize(string, self.to_dict)
+        return rtn
+
+    def copy_data(self, category: str = 'summary'):
+        '''复制CVirtualGridCtrl|Custom<n>的文本数据到剪贴板
+        广发
+        '''
+        globals().update(pyperclip=__import__('pyperclip'))
         pyperclip.copy('')
 
+        self.switch(category, 0.5)
+        user32.PostMessageW(self.get_handle(category),
+                            util.Msg.WM_COMMAND, util.Msg.COPY, 0)
+
         for _ in range(9):
-            user32.PostMessageW(h_table, util.Msg.WM_COMMAND, util.Msg.COPY, 0)
-
             # 关闭验证码弹窗
-            if self.copy_protection:
-                print('Removing copy protection...')
-                self.wait()  # have to
-                handle = user32.GetLastActivePopup(self.root)
-                if handle != self.root:
-                    for _ in range(9):
-                        self.wait(0.3)
-                        if self.visible(handle):
-                            text = self.verify(self.grab(handle))
-                            hEdit = user32.FindWindowExW(handle, None, 'Edit', "")
-                            self.fill(text, hEdit).click_button(
-                                h_dialog=handle).wait(0.3)  # have to wait!
-                            break
-
-            self.wait(0.1)
-            ret = pyperclip.paste().splitlines()
-            if ret:
+            print('Removing copy protection...')
+            time.sleep(0.1)  # have to
+            h_popup = util.wait_for_popup(self.root)
+            if util.wait_for_view(h_popup):
+                text = self.verify(self.grab(h_popup))
+                h_edit = user32.FindWindowExW(h_popup, None, 'Edit', "")
+                util.fill(text, h_edit)
+                util.click_button(h_dialog=h_popup, label='确定')
+                time.sleep(0.3)  # have to wait!
                 break
-            self.wait(0.1)
+
+        _replace = {'参考市值': '市值', '最新市值': '市值'}  # 兼容国金/平安"最新市值"、银河“参考市值”。
+        ret = pyperclip.paste().splitlines()
 
         # 数据格式化
         temp = (x.split('\t') for x in ret)
@@ -600,7 +472,7 @@ class Account:
             if tag in header:
                 header.insert(header.index(tag), value)
                 header.remove(tag)
-        return [OrderedDict(zip(header, x)) for x in temp]
+        return [dict(zip(header, x)) for x in temp]
 
     @lru_cache()
     def get_handle(self, action: str):
@@ -618,50 +490,6 @@ class Account:
                 user32.GetDlgItem, m,
                 self.root if action in ('account', 'mkt') else self._page)
         return data
-
-    def text(self, obj, key=0):
-        buf = ctypes.create_unicode_buffer(32)
-        {
-            0: user32.GetWindowTextW,
-            1: user32.GetClassNameW
-        }.get(key)(obj, buf, 32)
-        # user32.SendMessageW(obj, util.Msg.WM_GETTEXT, 32, buf)
-        return buf.value
-
-    def _text(self, h_text=None, id_text=None):
-        buf = ctypes.create_unicode_buffer(64)
-        if id_text:
-            user32.SendDlgItemMessageW(self._page, id_text, util.Msg.WM_GETTEXT,
-                                       64, buf)
-        else:
-            user32.SendMessageW(h_text or next(self.members),
-                                util.Msg.WM_GETTEXT, 64, buf)
-        return buf.value
-
-    def fill(self, text, h_edit=None, h_dialog=None, id_edit=None):
-        h_edit = h_edit or next(self.members)
-        if text:
-            text = str(text)
-            if h_edit:
-                user32.SendMessageW(h_edit, util.Msg.WM_SETTEXT, 0, text)
-            else:
-                user32.SendDlgItemMessageW(h_dialog, id_edit,
-                                           util.Msg.WM_SETTEXT, 0, text)
-        return self
-
-    def click_button(self, label='', btn_id=1006, h_dialog=None):
-        h_dialog = h_dialog or self._page
-        if label:
-            btn_h = user32.FindWindowExW(h_dialog, 0, 'Button', label)
-            btn_id = user32.GetDlgCtrlID(btn_h)
-        user32.PostMessageW(h_dialog, util.Msg.WM_COMMAND, btn_id, 0)
-        return self
-
-    def click_key(self, keyCode, param=0):  # 单击按键
-        if keyCode:
-            user32.PostMessageW(self._page, util.Msg.WM_KEYDOWN, keyCode, param)
-            user32.PostMessageW(self._page, util.Msg.WM_KEYUP, keyCode, param)
-        return self
 
     def grab(self, hParent=None):
         "屏幕截图"
@@ -718,7 +546,7 @@ class Account:
                         break
                     hwndChildAfter = hButton
                 user32.SendMessageW(hTips, util.Msg.WM_GETTEXT, 64, buf)
-                self.click_button(label, h_dialog=hPopup)
+                util.click_button(h_dialog=hPopup, label=label)
                 break
         text = buf.value
         return text if text else '请按提示修改：系统设置->快速交易->委托成功后是否弹出提示对话框->是'
@@ -737,7 +565,6 @@ class Account:
     def refresh(self):
         print('Refreshing page...')
         user32.PostMessageW(self.root, util.Msg.WM_COMMAND, self.ctx.FRESH, 0)
-        self.set_focus()
         return self if self.visible() else False
 
     def switch_combo(self, hCombo=None):
@@ -805,10 +632,11 @@ class Account:
         names = ['code', 'price']
         if isinstance(codes, str):
             codes = [codes]
+
         def _quote(code: str) -> float:
-            self.fill(code, code_h).wait(0.1)
+            util.fill(code, code_h)
             for _ in range(5):
-                text = get_text(handle)
+                text = util.get_text(handle)
                 if text != '-':
                     return float(text)
                 self.wait(0.1)
