@@ -5,7 +5,7 @@
 """
 __author__ = "睿瞳深邃(https://github.com/Raytone-D)"
 __project__ = 'Puppet'
-__version__ = "1.7.8"
+__version__ = "1.8.3"
 __license__ = 'MIT'
 
 import ctypes
@@ -74,7 +74,8 @@ class Ths:
     }
     INIT = ('cancel', 'deal', 'order', 'buy', 'sell')
     LOGIN = (1011, 1012, 1001, 1003, 1499)
-    ACCOUNT = (59392, 0)  # , 1711)
+    ACCOUNT = (59392, 0, 1711)
+    ACCNAME = (59392, 0, 2322)
     MKT = (59392, 0, 1003)
     TABLE = (1047, 200, 1047)
     SUMMARY_ = ('summary', 'margin')
@@ -128,12 +129,12 @@ class Account:
     def _post_init(self):
         self.heartbeat_stamp = time.time()
         self.root = 0
-        self.id = None
         self.ctx = Ths
         self.filename = '{}\\table.xls'.format(
             self.dirname or util.locate_folder())
         self.loginfile = '{}\\login.json'.format(
             self.dirname or util.locate_folder())
+        self.dxinput = __import__('pydirectinput')
 
         self.cancel_all = partial(self.cancel, action='cancel_all')
         self.cancel_buy = partial(self.cancel, action='cancel_buy')
@@ -238,8 +239,9 @@ class Account:
         util.click_button(h_dialog=self._page, label=label)
         return self
 
-    def __get_id(self):
-        return util.get_text(0, self.get_handle('account'), 1711)
+    @property
+    def accno(self):
+        return util.get_text(reduce(user32.GetDlgItem, self.ctx.ACCOUNT, self.root))
 
     def trade(self, action: str, symbol: str = '', *args, delay: float = 0.1) -> dict:
         """下单
@@ -400,7 +402,6 @@ class Account:
         self.location = False
 
         self.make_heartbeat()
-        self.id = self.__get_id()
 
         print("{} 木偶准备就绪！".format(util.curr_time()))
         return self
@@ -428,7 +429,7 @@ class Account:
             time.sleep(1)  # temporary
             rtn = dict((x, float(util.get_text(h_parent=self._page, id_child=y)))
                        for x, y in getattr(self.ctx, category.upper()))
-            rtn.update(login_id=self.__get_id(), token=id(self))
+            rtn.update(login_id=self.accno, token=id(self))
 
         else:
             time.sleep(0.5)
@@ -567,13 +568,6 @@ class Account:
         user32.PostMessageW(self.root, util.Msg.WM_COMMAND, self.ctx.FRESH, 0)
         return self if self.visible() else False
 
-    def switch_combo(self, hCombo=None):
-        handle = hCombo or next(self.members)
-        user32.SendMessageW(
-            user32.GetParent(handle), util.Msg.WM_COMMAND,
-            util.Msg.CBN_SELCHANGE << 16 | user32.GetDlgCtrlID(handle), handle)
-        return self
-
     def switch_mkt(self, symbol: str, handle: int):
         """
         :Prefix:上交所: '5'基, '6'A, '7'申购, '11'转债', 9'B
@@ -581,16 +575,15 @@ class Account:
         """
         index = self.mkt[0] if symbol.startswith(
             ('6', '5', '7', '11')) else self.mkt[1]
-        user32.SendMessageW(handle, util.Msg.CB_SETCURSEL, index, 0)
-        return self.switch_combo(handle)
+        return util.switch_combobox(index, handle)
 
     def switch_way(self, index):
-        "切换委托策略"
-        handle = next(self.members)
-        if index not in (1, 2, 3, 4, 5):
-            index = 0
-        user32.SendMessageW(handle, util.Msg.CB_SETCURSEL, index, 0)
-        return self.switch_combo(handle)
+        """转为市价委托
+
+        index: {1, 2, 3, 4, 5}, 留意沪深市价单有所不同。
+        """
+        if index in {1, 2, 3, 4, 5}:
+            return util.switch_combobox(index, next(self.members))
 
     def if_fund(self, symbol, price):
         if symbol.startswith('5'):
@@ -646,3 +639,20 @@ class Account:
                 self.pd = import_module('pandas')
             data = self.pd.DataFrame(data, columns=names)
         return data
+
+    def switch_account(self, serial_no: int):
+        """切换账号
+
+        serial_no: 登录账号的顺序号，从1开始。
+        """
+        cb = reduce(user32.GetDlgItem, self.ctx.ACCNAME, self.root)
+        count = user32.SendMessageW(cb, util.Msg.CB_GETCOUNT, 0, 0)
+        curr = user32.SendMessageW(cb, util.Msg.CB_GETCURSEL, 0, 0) + 1
+
+        if 0 < serial_no < count and serial_no != curr and util.go_to_top(self.root):
+            self.dxinput.keyDown('alt')
+            self.dxinput.press(str(serial_no))
+            self.dxinput.keyUp('alt')
+            time.sleep(0.1)
+            return self.accno, util.get_text(cb)
+        return curr, count

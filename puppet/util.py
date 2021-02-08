@@ -41,8 +41,11 @@ class Msg:
     BM_CLICK = 245
     BST_CHECKED = 1
     CB_GETCOUNT = 326
+    CB_GETCURSEL = 327
     CB_SETCURSEL = 334
+    CB_SHOWDROPDOWN = 335
     CBN_SELCHANGE = 1
+    CBN_SELENDOK = 9
     MOUSEEVENTF_LEFTDOWN = 2
     MOUSEEVENTF_LEFTUP = 4
     MOUSEEVENTF_RIGHTDOWN = 8
@@ -274,6 +277,11 @@ def locate_folder(name='Personal'):
 
 
 def simulate_shortcuts(key1, key2=None):
+    """
+    VK_CONTROL = 17
+    VK_ALT = 18
+    VK_S = 83
+    """
     KEYEVENTF_KEYUP = 2
     scan1 = user32.MapVirtualKeyW(key1, 0)
     user32.keybd_event(key1, scan1, 0, 0)
@@ -286,8 +294,8 @@ def simulate_shortcuts(key1, key2=None):
 
 def click_key(self, keyCode, param=0):  # 单击按键
     if keyCode:
-        user32.PostMessageW(self._page, util.Msg.WM_KEYDOWN, keyCode, param)
-        user32.PostMessageW(self._page, util.Msg.WM_KEYUP, keyCode, param)
+        user32.PostMessageW(self._page, Msg.WM_KEYDOWN, keyCode, param)
+        user32.PostMessageW(self._page, Msg.WM_KEYUP, keyCode, param)
     return self
 
 
@@ -392,6 +400,14 @@ def export_data(path: str, root=None, label='另存为', location=False):
             else:
                 break
     return string
+
+
+def switch_combobox(index: int, handle: int):
+    user32.SendMessageW(handle, Msg.CB_SETCURSEL, index, 0)
+    time.sleep(0.5)
+    user32.SendMessageW(
+        user32.GetParent(handle), Msg.WM_COMMAND,
+        Msg.CBN_SELCHANGE << 16 | user32.GetDlgCtrlID(handle), handle)
 
 
 if __name__ == "__main__":

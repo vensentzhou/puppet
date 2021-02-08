@@ -4,7 +4,7 @@ from setuptools import setup
 
 from puppet import __version__ as VERSION
 
-REQUIRED = ['baidu-aip', 'keyboard']
+REQUIRED = ['baidu-aip', 'pydirectinput']
 REQUIRES_PYTHON = '>=3.4.0'
 
 setup(
@@ -19,7 +19,7 @@ setup(
     python_requires=REQUIRES_PYTHON,
     install_requires=REQUIRED,
     packages=['puppet'],
-    #test_suite='tests',
+    # test_suite='tests',
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Environment :: Win32 (MS Windows)',
