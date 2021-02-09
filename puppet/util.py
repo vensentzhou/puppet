@@ -249,11 +249,17 @@ def find_single_handle(h_dialog, keyword: str = '', classname='Static') -> int:
 
 def go_to_top(h_root: int):
     '''窗口置顶'''
+    if user32.IsIconic(h_root):
+        user32.SwitchToThisWindow(h_root, True)
+        time.sleep(0.1)
+
     for _ in range(99):
         if user32.GetForegroundWindow() == h_root:
             return True
-        user32.SwitchToThisWindow(h_root, True)
-        time.sleep(0.01)  # DON'T REMOVE!
+        xpos, ypos, _r, _b = get_rect(h_root)
+        user32.SetCursorPos(xpos + 50, ypos + 10)
+        user32.mouse_event(Msg.MOUSEEVENTF_LEFTDOWN | Msg.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        time.sleep(0.1)  # DON'T REMOVE!
 
 
 def image_to_string(image, token={
@@ -326,8 +332,8 @@ def wait_for_popup(root: int, popup_title=None, timeout: float = 3.0, interval: 
             user32.SendMessageW(h_popup, Msg.WM_GETTEXT, 64, buf)
             if popup_title is None or buf.value in popup_title:
                 return h_popup
-            if time.time() - start >= timeout:
-                break
+        if time.time() - start >= timeout:
+            break
 
 
 def wait_for_view(handle: int, timeout: float = 1, interval: float = 0.1):

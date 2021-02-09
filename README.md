@@ -23,7 +23,8 @@ acc = puppet.Account(title='')
 acc.buy('000001', 12.68, 100)
 acc.sell('000001', 12.68, 100)
 
-acc.cancel_buy('510050', 3.149, 100)
+# 只支持按代码撤单。
+acc.cancel_buy('510050')
 acc.cancel_all()
 
 acc.query('historical_deal')

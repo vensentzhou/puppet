@@ -5,7 +5,7 @@
 """
 __author__ = "睿瞳深邃(https://github.com/Raytone-D)"
 __project__ = 'Puppet'
-__version__ = "1.8.3"
+__version__ = "1.8.5"
 __license__ = 'MIT'
 
 import ctypes
@@ -418,25 +418,26 @@ class Account:
         """
         print('Querying {} on-line...'.format(category))
         self.switch(category)
-        util.go_to_top(self.root)
 
-        _l, ypos, xpos, _b = util.get_rect(self.root)
-        xpos -= 16
-        ypos += 166 if category in self.ctx.SUMMARY_ else 332
+        rtn = util.pd.Series({'puppet': False})
+        if util.go_to_top(self.root):
 
-        rtn = {'puppet': False} if self.to_dict else util.pd.DataFrame()
-        if util.get_text(user32.WindowFromPoint(ctypes.wintypes.POINT(xpos, ypos))) == '':
-            time.sleep(1)  # temporary
-            rtn = dict((x, float(util.get_text(h_parent=self._page, id_child=y)))
-                       for x, y in getattr(self.ctx, category.upper()))
-            rtn.update(login_id=self.accno, token=id(self))
+            _l, ypos, xpos, _b = util.get_rect(self.root)
+            xpos -= 16
+            ypos += 166 if category in self.ctx.SUMMARY_ else 332
 
-        else:
-            time.sleep(0.5)
-            util.click_context_menu('s', xpos, ypos)
-            string = util.export_data(self.filename, self.root, location=self.location)
-            if string != '':
-                rtn = util.normalize(string, self.to_dict)
+            if util.get_text(user32.WindowFromPoint(ctypes.wintypes.POINT(xpos, ypos))) == '':
+                time.sleep(1)  # temporary
+                rtn = dict((x, float(util.get_text(h_parent=self._page, id_child=y)))
+                           for x, y in getattr(self.ctx, category.upper()))
+                rtn.update(login_id=self.accno, token=id(self))
+
+            else:
+                time.sleep(0.5)
+                util.click_context_menu('s', xpos, ypos)
+                string = util.export_data(self.filename, self.root, location=self.location)
+                if string != '':
+                    rtn = util.normalize(string, self.to_dict)
         return rtn
 
     def copy_data(self, category: str = 'summary'):
