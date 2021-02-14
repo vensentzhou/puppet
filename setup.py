@@ -4,13 +4,13 @@ from setuptools import setup
 
 from puppet import __version__ as VERSION
 
-REQUIRED = ['pyperclip']
+REQUIRED = ['baidu-aip', 'pydirectinput']
 REQUIRES_PYTHON = '>=3.4.0'
 
 setup(
     name='puppet',
     version=VERSION,
-    description=("一个用来交易A股的应用编程接口"),
+    description=("一个用来交易沪深A股的应用编程接口"),
     license='MIT',
     author='Raytone-D',
     author_email='raytone@qq.com',
@@ -19,7 +19,7 @@ setup(
     python_requires=REQUIRES_PYTHON,
     install_requires=REQUIRED,
     packages=['puppet'],
-    #test_suite='tests',
+    # test_suite='tests',
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Environment :: Win32 (MS Windows)',
@@ -29,5 +29,6 @@ setup(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
     ],
 )
